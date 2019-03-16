@@ -1,10 +1,7 @@
-variable "region" {
-  default = "europe-west1-d"
-}
 
 provider "google" {
-  credentials = "${file("gcp.json")}"
-  project     = "probproject"
+  credentials = "${file(".ssh/gcp.json")}"
+  project     = "${var.project_name}"
   region      = "${var.region}"
 }
 
@@ -22,7 +19,7 @@ resource "google_compute_firewall" "tcp-firewall-rule-8080" {
 resource "google_compute_instance" "test" {
   name         = "test"
   machine_type = "f1-micro"
-  zone         = "${var.region}"
+  zone         = "${var.zone}"
 
   boot_disk {
     initialize_params {
@@ -52,7 +49,7 @@ yum install -y jenkins
 #start the Jenkins service
 systemctl start jenkins
 #enable the Jenkins service to start on system boot
-sudo systemctl enable jenkins
+systemctl enable jenkins
 #install maven
 yum install maven -y
 #download maven latest version
@@ -63,23 +60,83 @@ tar xf /tmp/apache-maven-3.6.0-bin.tar.gz -C /opt
 ln -s /opt/apache-maven-3.6.0 /opt/maven
 #setup the environment variables
 cat <<EOF | tee -a /etc/profile.d/maven.sh
-  export JAVA_HOME=/usr/lib/jvm/java-1.8.0-amazon-corretto.x86_64/jre
-  export M2_HOME=/opt/maven
-  export MAVEN_HOME=/opt/maven
-  export PATH=$${M2_HOME}/bin:$${PATH}
+export JAVA_HOME=/usr/lib/jvm/java-1.8.0-amazon-corretto.x86_64/jre
+export M2_HOME=/opt/maven
+export MAVEN_HOME=/opt/maven
+export PATH=$${M2_HOME}/bin:$${PATH}
 EOF
+#
 chmod +x /etc/profile.d/maven.sh
 #load the environment variables
 source /etc/profile.d/maven.sh
+########################################################################################
+jusername="User"
+juserpassword="userpass"
+juseremail="bbb@bbb.bbb"
+key=`cat /var/lib/jenkins/secrets/initialAdminPassword`
+# wait for jenkins start up
+response=""
+while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
+  echo "Jenkins not started, wait for 2s"
+  response=`java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+  http://localhost:8080 who-am-i --username admin --password $$key`
+  echo $$response
+  sleep 2
+done
+#install plugins
+java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+http://localhost:8080/ -auth admin:$$key -noKeyAuth install-plugin \
+ant blueocean blueocean-autofavorite build-timeout email-ext ghprb gradle \
+jacoco workflow-aggregator sbt ssh-slaves subversion pipeline-github-lib \
+timestamper ws-cleanup -restart
+#create groovy script
+cat <<EOF | tee -a ~/user-creation.groovy
+#!groovy
+import jenkins.model.*
+import hudson.security.*
+import jenkins.install.InstallState
+import hudson.tasks.Mailer
+
+def instance = Jenkins.getInstance()
+def username = args[0]
+def userpassword = args[1]
+def useremail = args[2]
+
+println "--> Creating Local User"
+def user = instance.getSecurityRealm().createAccount(username, userpassword)
+user.addProperty(new Mailer.UserProperty(useremail))
+user.save()
+
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+
+if (!instance.installState.isSetupComplete()) {
+  println '--> Disable SetupWizard'
+  InstallState.INITIAL_SETUP_COMPLETED.initializeState()
+}
+instance.save()
+EOF
+# wait for jenkins start up
+response=""
+while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
+  echo "Jenkins not started, wait for 2s"
+  response=`java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+  http://localhost:8080 who-am-i --username admin --password $$key`
+  echo $$response
+  sleep 2
+done
+#creating local user and disable installation wizard
+java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+http://localhost:8080/ -auth admin:$$key groovy = \
+< ~/user-creation.groovy $$jusername $$juserpassword $$juseremail
+
+# restart jenkins
+java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+http://localhost:8080/ -auth admin:$$key safe-restart
 SCRIPT
 
   metadata {
     sshKeys = ""
   }
 }
-output "public_ip" {
-  value = ["${google_compute_instance.test.*.network_interface.0.access_config.0.nat_ip}"]
-}
-
-
-
