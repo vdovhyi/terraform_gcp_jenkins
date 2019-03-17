@@ -18,7 +18,7 @@ resource "google_compute_firewall" "tcp-firewall-rule-8080" {
 
 resource "google_compute_instance" "test" {
   name         = "test"
-  machine_type = "f1-micro"
+  machine_type = "g1-small"
   zone         = "${var.zone}"
 
   boot_disk {
@@ -86,9 +86,7 @@ done
 #install plugins
 java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
 http://localhost:8080/ -auth admin:$$key -noKeyAuth install-plugin \
-ant blueocean blueocean-autofavorite build-timeout email-ext ghprb gradle \
-jacoco workflow-aggregator sbt ssh-slaves subversion pipeline-github-lib \
-timestamper ws-cleanup -restart
+dashboard-view cloudbees-folder antisamy-markup-formatter build-name-setter build-timeout config-file-provider credentials-binding embeddable-build-status rebuild ssh-agent throttle-concurrents timestamper ws-cleanup ant gradle msbuild nodejs checkstyle cobertura htmlpublisher junit warnings xunit workflow-aggregator github-organization-folder pipeline-stage-view build-pipeline-plugin conditional-buildstep jenkins-multijob-plugin parameterized-trigger copyartifact bitbucket clearcase cvs git git-parameter github gitlab-plugin p4 repo subversion teamconcert tfs matrix-project ssh-slaves windows-slaves matrix-auth pam-auth ldap role-strategy active-directory email-ext emailext-template mailer publish-over-ssh ssh -restart
 #create groovy script
 cat <<EOF | tee -a ~/user-creation.groovy
 #!groovy
