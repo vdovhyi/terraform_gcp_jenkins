@@ -35,7 +35,7 @@ resource "google_compute_instance" "test" {
   }
   metadata_startup_script = <<SCRIPT
 yum update -y
-yum install -y mc nano wget
+yum install -y mc nano wget git
 #install java amazon corretto JDK and JRE
 wget https://d1f2yzg3dx5xke.cloudfront.net/java-1.8.0-amazon-corretto-devel-1.8.0_202.b08-1.amzn2.x86_64.rpm
 wget https://d1f2yzg3dx5xke.cloudfront.net/java-1.8.0-amazon-corretto-1.8.0_202.b08-1.amzn2.x86_64.rpm
@@ -74,6 +74,7 @@ jusername="User"
 juserpassword="userpass"
 juseremail="bbb@bbb.bbb"
 key=`cat /var/lib/jenkins/secrets/initialAdminPassword`
+
 # wait for jenkins start up
 response=""
 while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
@@ -83,10 +84,18 @@ while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
   echo $$response
   sleep 2
 done
+
 #install plugins
 java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
 http://localhost:8080/ -auth admin:$$key -noKeyAuth install-plugin \
-dashboard-view cloudbees-folder antisamy-markup-formatter build-name-setter build-timeout config-file-provider credentials-binding embeddable-build-status rebuild ssh-agent throttle-concurrents timestamper ws-cleanup ant gradle msbuild nodejs checkstyle cobertura htmlpublisher junit warnings xunit workflow-aggregator github-organization-folder pipeline-stage-view build-pipeline-plugin conditional-buildstep jenkins-multijob-plugin parameterized-trigger copyartifact bitbucket clearcase cvs git git-parameter github gitlab-plugin p4 repo subversion teamconcert tfs matrix-project ssh-slaves windows-slaves matrix-auth pam-auth ldap role-strategy active-directory email-ext emailext-template mailer publish-over-ssh ssh -restart
+dashboard-view cloudbees-folder antisamy-markup-formatter build-name-setter build-timeout config-file-provider \
+credentials-binding embeddable-build-status rebuild ssh-agent throttle-concurrents timestamper ws-cleanup ant gradle \
+msbuild nodejs checkstyle cobertura htmlpublisher junit warnings xunit workflow-aggregator github-organization-folder \
+pipeline-stage-view build-pipeline-plugin conditional-buildstep jenkins-multijob-plugin parameterized-trigger \
+copyartifact bitbucket clearcase cvs git git-parameter github gitlab-plugin p4 repo subversion teamconcert tfs \
+matrix-project ssh-slaves windows-slaves matrix-auth pam-auth ldap role-strategy active-directory email-ext \
+emailext-template mailer publish-over-ssh ssh -restart
+
 #create groovy script
 cat <<EOF | tee -a ~/user-creation.groovy
 #!groovy
@@ -94,6 +103,7 @@ import jenkins.model.*
 import hudson.security.*
 import jenkins.install.InstallState
 import hudson.tasks.Mailer
+import hudson.tasks.*
 
 def instance = Jenkins.getInstance()
 def username = args[0]
@@ -114,7 +124,15 @@ if (!instance.installState.isSetupComplete()) {
   InstallState.INITIAL_SETUP_COMPLETED.initializeState()
 }
 instance.save()
+
+println '--> Configure Maven'
+def inst = Jenkins.getInstance()
+def desc = inst.getDescriptor("hudson.tasks.Maven")
+def minst =  new hudson.tasks.Maven.MavenInstallation("Maven_name", "/opt/maven");
+desc.setInstallations(minst)
+desc.save()
 EOF
+
 # wait for jenkins start up
 response=""
 while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
@@ -129,9 +147,86 @@ java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
 http://localhost:8080/ -auth admin:$$key groovy = \
 < ~/user-creation.groovy $$jusername $$juserpassword $$juseremail
 
+sed -i -e 's+<home>git</home>+<home>/usr/bin/git</home>+g' /var/lib/jenkins/hudson.plugins.git.GitTool.xml
+
+cat <<EOF | tee -a ~/myjob.xml
+<?xml version='1.1' encoding='UTF-8'?>
+<project>
+  <description>Java job</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty plugin="gitlab-plugin@1.5.11">
+      <gitLabConnection></gitLabConnection>
+    </com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty>
+    <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@1.29">
+      <autoRebuild>false</autoRebuild>
+      <rebuildDisabled>false</rebuildDisabled>
+    </com.sonyericsson.rebuild.RebuildSettings>
+    <hudson.plugins.throttleconcurrents.ThrottleJobProperty plugin="throttle-concurrents@2.0.1">
+      <categories class="java.util.concurrent.CopyOnWriteArrayList"/>
+      <throttleEnabled>false</throttleEnabled>
+      <throttleOption>project</throttleOption>
+      <limitOneJobWithMatchingParams>false</limitOneJobWithMatchingParams>
+      <paramsToUseForLimit></paramsToUseForLimit>
+    </hudson.plugins.throttleconcurrents.ThrottleJobProperty>
+  </properties>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@3.9.3">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>https://github.com/IF-090Java/eSchool.git</url>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>*/master</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <submoduleCfg class="list"/>
+    <extensions/>
+  </scm>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Maven>
+      <targets>clean package</targets>
+      <mavenName>Maven_name</mavenName>
+      <usePrivateRepository>false</usePrivateRepository>
+      <settings class="jenkins.mvn.DefaultSettingsProvider"/>
+      <globalSettings class="jenkins.mvn.DefaultGlobalSettingsProvider"/>
+      <injectBuildVariables>false</injectBuildVariables>
+    </hudson.tasks.Maven>
+  </builders>
+  <publishers/>
+  <buildWrappers/>
+</project>
+EOF
+
 # restart jenkins
 java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
 http://localhost:8080/ -auth admin:$$key safe-restart
+
+# wait for jenkins start up
+response=""
+while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
+  echo "Jenkins not started, wait for 2s"
+  response=`java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+  http://localhost:8080 who-am-i --username admin --password $$key`
+  echo $$response
+  sleep 2
+done
+
+#create job
+java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+http://localhost:8080/ -auth admin:$$key create-job newmyjob < ~/myjob.xml
+#build job
+java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
+http://localhost:8080/ -auth admin:$$key build newmyjob
 SCRIPT
 
   metadata {
