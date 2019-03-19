@@ -4,14 +4,13 @@ provider "google" {
   project     = "${var.project_name}"
   region      = "${var.region}"
 }
-
 resource "google_compute_firewall" "tcp-firewall-rule-8080" {
-  name = "tcp-firewall-rule-8080"
+  name = "tcp-firewall-rule-8080-22"
   network = "default"
 
   allow {
     protocol = "tcp"
-    ports = ["8080"]
+    ports = ["8080", "22"]
   }
   source_ranges = ["0.0.0.0/0"]
 }
@@ -69,13 +68,10 @@ EOF
 chmod +x /etc/profile.d/maven.sh
 #load the environment variables
 source /etc/profile.d/maven.sh
-########################################################################################
 jusername="User"
 juserpassword="userpass"
 juseremail="bbb@bbb.bbb"
 key=`cat /var/lib/jenkins/secrets/initialAdminPassword`
-
-# wait for jenkins start up
 response=""
 while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
   echo "Jenkins not started, wait for 2s"
@@ -84,8 +80,6 @@ while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
   echo $$response
   sleep 2
 done
-
-#install plugins
 java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
 http://localhost:8080/ -auth admin:$$key -noKeyAuth install-plugin \
 dashboard-view cloudbees-folder antisamy-markup-formatter build-name-setter build-timeout config-file-provider \
@@ -96,7 +90,6 @@ copyartifact bitbucket clearcase cvs git git-parameter github gitlab-plugin p4 r
 matrix-project ssh-slaves windows-slaves matrix-auth pam-auth ldap role-strategy active-directory email-ext \
 emailext-template mailer publish-over-ssh ssh -restart
 
-#create groovy script
 cat <<EOF | tee -a ~/user-creation.groovy
 #!groovy
 import jenkins.model.*
@@ -104,28 +97,22 @@ import hudson.security.*
 import jenkins.install.InstallState
 import hudson.tasks.Mailer
 import hudson.tasks.*
-
 def instance = Jenkins.getInstance()
 def username = args[0]
 def userpassword = args[1]
 def useremail = args[2]
-
-println "--> Creating Local User"
 def user = instance.getSecurityRealm().createAccount(username, userpassword)
 user.addProperty(new Mailer.UserProperty(useremail))
 user.save()
-
 def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
 strategy.setAllowAnonymousRead(false)
 instance.setAuthorizationStrategy(strategy)
 
 if (!instance.installState.isSetupComplete()) {
-  println '--> Disable SetupWizard'
   InstallState.INITIAL_SETUP_COMPLETED.initializeState()
 }
 instance.save()
 
-println '--> Configure Maven'
 def inst = Jenkins.getInstance()
 def desc = inst.getDescriptor("hudson.tasks.Maven")
 def minst =  new hudson.tasks.Maven.MavenInstallation("Maven_name", "/opt/maven");
@@ -133,7 +120,6 @@ desc.setInstallations(minst)
 desc.save()
 EOF
 
-# wait for jenkins start up
 response=""
 while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
   echo "Jenkins not started, wait for 2s"
@@ -142,7 +128,7 @@ while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
   echo $$response
   sleep 2
 done
-#creating local user and disable installation wizard
+
 java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
 http://localhost:8080/ -auth admin:$$key groovy = \
 < ~/user-creation.groovy $$jusername $$juserpassword $$juseremail
@@ -207,11 +193,9 @@ cat <<EOF | tee -a ~/myjob.xml
 </project>
 EOF
 
-# restart jenkins
 java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s \
 http://localhost:8080/ -auth admin:$$key safe-restart
 
-# wait for jenkins start up
 response=""
 while [ `echo $$response | grep 'Authenticated' | wc -l` = 0 ]; do
   echo "Jenkins not started, wait for 2s"
@@ -230,6 +214,7 @@ http://localhost:8080/ -auth admin:$$key build newmyjob
 SCRIPT
 
   metadata {
-    sshKeys = ""
+    ssh-keys = "admin:${file(".ssh/public_key.pub")}"
   }
+
 }
