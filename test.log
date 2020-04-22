@@ -1,0 +1,4 @@
+2019-12-09 14:14:15 10.49.0.10 GET / - 65018 - 10.49.226.7 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/74.0.3729.157+Safari/537.36 - 200 0 0 448
+2019-12-09 14:14:15 10.49.0.10 GET /runtime.60cb88b2eac7b014369d.js - 65018 - 10.49.226.7 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/74.0.3729.157+Safari/537.36 https://10.49.0.10:65018/ 200 0 0 42
+2019-12-09 14:14:15 10.49.0.10 GET /polyfills.35c6895bb007f7d0af82.js - 65018 - 10.49.226.7 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/74.0.3729.157+Safari/537.36 https://10.49.0.10:65018/ 200 0 0 170
+2019-12-09 14:14:15 10.49.0.10 GET /styles.1ad29399e2751fe7688f.css - 65018 - 10.49.226.7 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/74.0.3729.157+Safari/537.36 https://10.49.0.10:65018/ 200 0 0 480
